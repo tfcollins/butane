@@ -1,72 +1,25 @@
 class jesd:
     """ JESD Rate Manager """
 
-    """ M: Number of virtual converters """
-    M_min = 1
-    M_max = 8
-    M_possible = [1, 2, 4, 8, 16, 32]
-    _M = 1
+    """ CS: Control bits per conversion sample 0-3"""
+    _CS = 0
 
-    """ L: Lanes per link """
-    L_min = 1
-    L_max = 8
-    L_possible = [1, 2, 4, 8]
-    _L = 1
+    """ CF: Control word per frame clock period per link 0-32 """
+    _CF = 0
 
-    """ F: Octets per frame per link """
-    F_min = 1
-    F_max = 16
-    F_possible = [1, 2, 4, 8, 16]
-    _F = 1
+    """ HD: High density mode """
+    _HD = 0
 
-    """ N: Number of non-dummy bits per sample """
-    N_min = 12
-    N_max = 16
-    N_possible = range(12, 16)
-    _N = 12
-
-    """ Np: Number of bits per sample """
-    Np_min = 12
-    Np_max = 16
-    Np_possible = range(12, 16)
-    _Np = 16
-
-    """ K: Frame per multiframe """
-    K_min = 4
-    K_max = 32
-    K_possible = [4, 8, 12, 16, 20, 24, 28, 32]
-    _K = 4
-
-    """ R: <FIXME> must be integer"""
-    _R = 1
-
-    """ D: <FIXME> must be integer"""
-    _D = 1
-
-    """ S: <FIXME> must be integer"""
-    _S = 1
-
-    """ C: Interpolator or decimation factor must be integer"""
-    _C = 1
-
-    allowed_encodings = ["8b10b", "64b66b"]
-    encodings_n = {"8b10b": 8, "64b66b": 64}
-    encodings_d = {"8b10b": 10, "64b66b": 66}
-    _encoding = "8b10b"
-
-    _sample_rate = 122.88e6
-
-    _sysref_clock = 100e6
-
-    """ bits
-        Usually:
-            32 for JESD204B 
-            64 for JESD204C
-    """
-    _data_path_width = 32
+    _sample_clock = 122.88e6
 
     def __init__(self):
         pass
+
+    ########### Encoding functions
+
+    encodings_n = {"8b10b": 8, "64b66b": 64}
+    encodings_d = {"8b10b": 10, "64b66b": 66}
+    _encoding = "8b10b"
 
     @property
     def encoding(self):
@@ -74,7 +27,7 @@ class jesd:
 
     @encoding.setter
     def encoding(self, value):
-        if value not in self.allowed_encodings:
+        if self._check_encoding(value):
             raise Exception("Must be {}".format(",".join(self.allowed_encodings)))
         self._encoding = value
 
@@ -86,29 +39,21 @@ class jesd:
     def encoding_n(self):
         return self.encodings_n[self._encoding]
 
-    @property
-    def lane_rate(self):
-        return (
-            self._sample_rate
-            * self.M
-            * self.Np
-            * self.encoding_d
-            / (self.L * self.encoding_n)
-        )
+    def _check_encoding(self, encode):
+        if "jesd204C" in self.supported_jesd_modes:
+            allowed_encodings = ["8b10b", "64b66b"]
+        else:
+            allowed_encodings = ["8b10b"]
+        return encode in allowed_encodings
 
-    @property
-    def lmfc_rate(self):
-        return self.lane_rate / (self.encoding_d * self.F * self.K)
+    ########### SCALERS
 
-    @property
-    def device_rate(self):
-        return self.lane_rate / (
-            self.data_path_width * self.encoding_d / self.encoding_n
-        )
-
-    ## Everything is based off sysref clock
-
-    ############################## SCALERS
+    """ bits
+        Usually:
+            32 for JESD204B 
+            64 for JESD204C
+    """
+    _data_path_width = 32
 
     @property
     def data_path_width(self):
@@ -119,6 +64,14 @@ class jesd:
         if int(value) != value:
             raise Exception("data_path_width must be an integer")
         self._data_path_width = value
+
+    """ K: Frame per multiframe
+        17/F <= K <= 32
+    """
+    K_min = 4
+    K_max = 32
+    K_possible = [4, 8, 12, 16, 20, 24, 28, 32]
+    _K = 4
 
     @property
     def K(self):
@@ -131,24 +84,11 @@ class jesd:
         self._K = value
 
     @property
-    def R(self):
-        return self._R
-
-    @R.setter
-    def R(self, value):
-        if int(value) != value:
-            raise Exception("R must be an integer")
-        self._R = value
-
-    @property
     def D(self):
-        return self._D
+        return self._data_path_width * self.encoding_d / self.encoding_n
 
-    @D.setter
-    def D(self, value):
-        if int(value) != value:
-            raise Exception("D must be an integer")
-        self._D = value
+    """ S: Samples per converter per frame"""
+    _S = 1
 
     @property
     def S(self):
@@ -160,25 +100,11 @@ class jesd:
             raise Exception("S must be an integer")
         self._S = value
 
-    @property
-    def C(self):
-        return self._C
-
-    @C.setter
-    def C(self, value):
-        if int(value) != value:
-            raise Exception("C must be an integer")
-        self._C = value
-
-    @property
-    def F(self):
-        return self._F
-
-    @F.setter
-    def F(self, value):
-        if int(value) != value:
-            raise Exception("F must be an integer")
-        self._F = value
+    """ L: Lanes per link """
+    L_min = 1
+    L_max = 8
+    L_possible = [1, 2, 4, 8]
+    _L = 1
 
     @property
     def L(self):
@@ -190,6 +116,12 @@ class jesd:
             raise Exception("L must be an integer")
         self._L = value
 
+    """ M: Number of virtual converters """
+    M_min = 1
+    M_max = 8
+    M_possible = [1, 2, 4, 8, 16, 32]
+    _M = 1
+
     @property
     def M(self):
         return self._M
@@ -200,6 +132,12 @@ class jesd:
             raise Exception("M must be an integer")
         self._M = value
 
+    """ N: Number of non-dummy bits per sample """
+    N_min = 12
+    N_max = 16
+    N_possible = range(12, 16)
+    _N = 12
+
     @property
     def N(self):
         return self._N
@@ -208,7 +146,13 @@ class jesd:
     def N(self, value):
         if int(value) != value:
             raise Exception("N must be an integer")
-        self._M = value
+        self._N = value
+
+    """ Np: Number of bits per sample """
+    Np_min = 12
+    Np_max = 16
+    Np_possible = range(12, 16)
+    _Np = 16
 
     @property
     def Np(self):
@@ -220,84 +164,56 @@ class jesd:
             raise Exception("Np must be an integer")
         self._Np = value
 
+    ########### DERIVED SCALERS
+    """ F: Octets per frame per link """
+    F_min = 1
+    F_max = 16
+    F_possible = [1, 2, 4, 8, 16]
+    # _F = 1
+    @property
+    def F(self):
+        return self.M * self.S * self.Np / (self.encoding_n * self.L)
+
     ########### CLOCKS
     @property
-    def sysref_clock(self):
-        return self._sysref_clock
-
-    @sysref_clock.setter
-    def sysref_clock(self, value):
-        pass
-
-    @property
-    def multiframe_clock(self):
-        return self.sysref_clock * self.R
-
-    @multiframe_clock.setter
-    def multiframe_clock(self, value):
-        pass
-
-    @property
-    def device_clock(self):
-        return self.multiframe_clock * self.D
-
-    @device_clock.setter
-    def device_clock(self, value):
-        pass
-
-    @property
-    def frame_clock(self):
-        return self.multiframe_clock * self.K
-
-    @frame_clock.setter
-    def frame_clock(self, value):
-        pass
-
-    @property
-    def character_clock(self):
-        return self.frame_clock * self.F
-
-    @character_clock.setter
-    def character_clock(self, value):
-        pass
-
-    @property
-    def bit_clock(self):
-        return self.character_clock * 10
-
-    @bit_clock.setter
-    def bit_clock(self, value):
-        pass
-
-    @property
     def sample_clock(self):
-        return self.frame_clock * self.S
+        """ Data rate after decimation stages in Samples/second """
+        return self._sample_clock
 
     @sample_clock.setter
     def sample_clock(self, value):
-        pass
+        self._sample_clock = value
 
     @property
-    def conversion_clock(self):
-        return self.sample_clock * self.C
+    def frame_clock(self):
+        """ frame_clock: FC
+        """
+        return self.sample_clock / self.S
 
-    @conversion_clock.setter
-    def conversion_clock(self, value):
-        pass
+    @property
+    def multiframe_clock(self):
+        return self.frame_clock / self.K
+
+    @property
+    def bit_clock(self):
+        """ bit_clock: aka line rate aka lane rate"""
+        return (
+            self.M
+            * self.S
+            * self.Np
+            * self.encoding_d
+            / self.encoding_n
+            * self.frame_clock
+        ) / self.L
+
+    @property
+    def device_clock(self):
+        return self.bit_clock / self.D
 
     def print_clocks(self):
         for p in dir(self):
             if p != "print_clocks":
                 if "clock" in p and p[0] != "_":
-                    print(p, getattr(self, p))
+                    print(p, getattr(self, p) / 1000000)
                 if "rate" in p and p[0] != "_":
-                    print(p, getattr(self, p))
-
-
-# j = jesd()
-# j.M = 8
-# j.L = 4
-# j.Np = 16
-# j.F = 4
-# j.K = 32
-# j.sample_rate = 250e6
+                    print(p, getattr(self, p) / 1000000)
